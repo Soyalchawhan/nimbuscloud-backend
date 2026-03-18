@@ -1,0 +1,1 @@
+export { searchRouter } from './linkShares';

@@ -1,0 +1,1 @@
+export { starsRouter } from './linkShares';
