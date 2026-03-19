@@ -6,6 +6,7 @@ export const getEffectiveRole = async (
   resourceId: string
 ): Promise<string | null> => {
   const table = resourceType === 'file' ? 'files' : 'folders';
+
   const { rows: owned } = await query(
     `SELECT id FROM ${table} WHERE id = $1 AND owner_id = $2 AND is_deleted = false`,
     [resourceId, userId]
@@ -13,10 +14,11 @@ export const getEffectiveRole = async (
   if (owned.length > 0) return 'owner';
 
   const { rows: shares } = await query(
-    `SELECT role FROM shares WHERE resource_type = $1 AND resource_id = $2 AND grantee_user_id = $3`,
+    `SELECT role FROM shares
+     WHERE resource_type = $1 AND resource_id = $2 AND grantee_user_id = $3`,
     [resourceType, resourceId, userId]
   );
-  if (shares.length > 0) return shares[0].role as string;
+  if (shares.length > 0) return String(shares[0].role);
 
   if (resourceType === 'file') {
     const { rows: files } = await query(
@@ -24,7 +26,7 @@ export const getEffectiveRole = async (
       [resourceId]
     );
     if (files[0]?.folder_id) {
-      return getEffectiveRole(userId, 'folder', files[0].folder_id);
+      return getEffectiveRole(userId, 'folder', String(files[0].folder_id));
     }
   }
 
@@ -48,6 +50,10 @@ export const requireRole = async (
   const requiredLevel = hierarchy.indexOf(minRole);
 
   if (userLevel < requiredLevel) {
-    throw { statusCode: 403, code: 'FORBIDDEN', message: `Requires ${minRole} access` };
+    throw {
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: `Requires ${minRole} access`,
+    };
   }
 };
