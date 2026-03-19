@@ -52,7 +52,7 @@ linkSharesRouter.post('/', async (req: Request, res: Response) => {
 linkSharesRouter.get('/:resourceType/:resourceId', async (req: Request, res: Response) => {
   await requireRole(
     req.user!.id,
-    req.params.resourceType as 'file' | 'folder',
+    req.params.resourceType,
     req.params.resourceId,
     'owner'
   );
@@ -124,23 +124,21 @@ publicLinkRouter.get('/:token', async (req: Request, res: Response) => {
     }
 
     const link = rows[0] as {
-  expires_at: string | null;
-  password_hash: string | null;
-  resource_type: string;
-  resource_id: string;
-  resourceName: string;
-  role: string;
-  token: string;
-};
+      expires_at: string | null;
+      password_hash: string | null;
+      resource_type: string;
+      resource_id: string;
+      resourceName: string;
+      role: string;
+      token: string;
+    };
 
-    // Check expiry
     if (link.expires_at && new Date(link.expires_at) < new Date()) {
       return res.status(410).json({
         error: { code: 'LINK_EXPIRED', message: 'This link has expired' }
       });
     }
 
-    // Check password
     if (link.password_hash) {
       const { password } = req.query;
       if (!password) {
@@ -159,7 +157,6 @@ publicLinkRouter.get('/:token', async (req: Request, res: Response) => {
       }
     }
 
-    // Get signed download URL for files
     let signedUrl: string | undefined;
     if (link.resource_type === 'file') {
       const { rows: fileRows } = await query(
@@ -168,7 +165,10 @@ publicLinkRouter.get('/:token', async (req: Request, res: Response) => {
       );
       if (fileRows[0]) {
         const port = process.env.PORT || 8080;
-        signedUrl = `http://localhost:${port}/api/files/download/${encodeURIComponent(fileRows[0].storage_key)}`;
+        const baseUrl = process.env.NODE_ENV === 'production'
+          ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME}`
+          : `http://localhost:${port}`;
+        signedUrl = `${baseUrl}/api/files/download/${encodeURIComponent(fileRows[0].storage_key)}`;
       }
     }
 
@@ -189,7 +189,7 @@ publicLinkRouter.get('/:token', async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RE-EXPORTS for other routes that import from here
+// SEARCH ROUTER
 // ─────────────────────────────────────────────────────────────────────────────
 export const searchRouter = Router();
 searchRouter.use(authenticate);
@@ -234,6 +234,9 @@ searchRouter.get('/', async (req: Request, res: Response) => {
   return res.json({ results, total: results.length });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// STARS ROUTER
+// ─────────────────────────────────────────────────────────────────────────────
 export const starsRouter = Router();
 starsRouter.use(authenticate);
 
@@ -293,6 +296,9 @@ starsRouter.delete('/', async (req: Request, res: Response) => {
   return res.json({ message: 'Unstarred' });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TRASH ROUTER
+// ─────────────────────────────────────────────────────────────────────────────
 export const trashRouter = Router();
 trashRouter.use(authenticate);
 
