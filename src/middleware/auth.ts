@@ -79,17 +79,3 @@ export const optionalAuth = async (
   }
   next();
 };
-```
-
-Click **"Commit changes"**.
-
----
-
-## Trigger Redeploy on Render
-
-Go to Render → `nimbuscloud-api` → **Manual Deploy** → **Deploy latest commit**
-
-Watch the logs — you should now see:
-```
-==> Build successful
-🚀 NimbusCloud API running
