@@ -9,12 +9,13 @@ const SALT_ROUNDS = 12;
 export const hashPassword = (password: string): Promise<string> =>
   bcrypt.hash(password, SALT_ROUNDS);
 
-export const comparePassword = (password: string, hash: string): Promise<boolean> =>
-  bcrypt.compare(password, hash);
+export const comparePassword = (
+  password: string,
+  hash: string
+): Promise<boolean> => bcrypt.compare(password, hash);
 
 export const generateAccessToken = (user: User): string => {
   const secret = process.env.JWT_SECRET || 'fallback-secret';
-  // Use any to bypass strict jsonwebtoken overload checking
   return (jwt as any).sign(
     { sub: user.id, email: user.email },
     secret,
@@ -44,7 +45,10 @@ export const saveRefreshToken = async (
 export const rotateRefreshToken = async (
   oldRaw: string
 ): Promise<{ user: User; newRaw: string } | null> => {
-  const oldHash = crypto.createHash('sha256').update(oldRaw).digest('hex');
+  const oldHash = crypto
+    .createHash('sha256')
+    .update(oldRaw)
+    .digest('hex');
 
   const { rows: tokens } = await query(
     `SELECT user_id, expires_at FROM refresh_tokens WHERE token_hash = $1`,
@@ -52,7 +56,10 @@ export const rotateRefreshToken = async (
   );
 
   if (!tokens[0] || tokens[0].expires_at < new Date()) {
-    await query('DELETE FROM refresh_tokens WHERE token_hash = $1', [oldHash]);
+    await query(
+      'DELETE FROM refresh_tokens WHERE token_hash = $1',
+      [oldHash]
+    );
     return null;
   }
 
@@ -60,20 +67,26 @@ export const rotateRefreshToken = async (
     `SELECT id, email, name, image_url as "imageUrl", provider,
             created_at as "createdAt", updated_at as "updatedAt"
      FROM users WHERE id = $1`,
-    [tokens[0].user_id]
+    [String(tokens[0].user_id)]
   );
 
   if (!users[0]) return null;
 
-  await query('DELETE FROM refresh_tokens WHERE token_hash = $1', [oldHash]);
+  await query(
+    'DELETE FROM refresh_tokens WHERE token_hash = $1',
+    [oldHash]
+  );
   const { raw: newRaw, hash: newHash } = generateRefreshToken();
-  await saveRefreshToken(users[0].id, newHash);
+  await saveRefreshToken(String(users[0].id), newHash);
 
-  return { user: users[0] as User, newRaw };
+  return { user: users[0] as unknown as User, newRaw };
 };
 
 export const revokeAllTokens = async (userId: string): Promise<void> => {
-  await query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
+  await query(
+    'DELETE FROM refresh_tokens WHERE user_id = $1',
+    [userId]
+  );
 };
 
 export const setAuthCookies = (
@@ -97,7 +110,9 @@ export const setAuthCookies = (
   });
 };
 
-export const clearAuthCookies = (res: import('express').Response): void => {
+export const clearAuthCookies = (
+  res: import('express').Response
+): void => {
   res.clearCookie('access_token');
   res.clearCookie('refresh_token', { path: '/api/auth/refresh' });
 };
