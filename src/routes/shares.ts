@@ -8,7 +8,6 @@ import { logActivity } from '../services/activityService';
 export const sharesRouter = Router();
 sharesRouter.use(authenticate);
 
-// ── POST /api/shares ──────────────────────────────────────────────────────────
 sharesRouter.post('/', async (req: Request, res: Response) => {
   const body = z.object({
     resourceType: z.enum(['file', 'folder']),
@@ -17,11 +16,16 @@ sharesRouter.post('/', async (req: Request, res: Response) => {
     role: z.enum(['viewer', 'editor']),
   }).parse(req.body);
 
-  await requireRole(req.user!.id, body.resourceType, body.resourceId, 'owner');
+  await requireRole(
+    req.user!.id,
+    String(body.resourceType),
+    String(body.resourceId),
+    'owner'
+  );
 
   if (body.granteeUserId === req.user!.id) {
     return res.status(400).json({
-      error: { code: 'SELF_SHARE', message: 'Cannot share with yourself' }
+      error: { code: 'SELF_SHARE', message: 'Cannot share with yourself' },
     });
   }
 
@@ -32,7 +36,7 @@ sharesRouter.post('/', async (req: Request, res: Response) => {
 
   if (!granteeRows[0]) {
     return res.status(404).json({
-      error: { code: 'NOT_FOUND', message: 'User not found' }
+      error: { code: 'NOT_FOUND', message: 'User not found' },
     });
   }
 
@@ -59,11 +63,13 @@ sharesRouter.post('/', async (req: Request, res: Response) => {
   return res.status(201).json({ share: rows[0] });
 });
 
-// ── GET /api/shares/:resourceType/:resourceId ─────────────────────────────────
 sharesRouter.get('/:resourceType/:resourceId', async (req: Request, res: Response) => {
-  const resourceType = req.params.resourceType;
-
-  await requireRole(req.user!.id, resourceType, req.params.resourceId, 'owner');
+  await requireRole(
+    req.user!.id,
+    String(req.params.resourceType),
+    String(req.params.resourceId),
+    'owner'
+  );
 
   const { rows } = await query(
     `SELECT s.id, s.resource_type as "resourceType", s.resource_id as "resourceId",
@@ -75,13 +81,12 @@ sharesRouter.get('/:resourceType/:resourceId', async (req: Request, res: Respons
      JOIN users u ON u.id = s.grantee_user_id
      WHERE s.resource_type = $1 AND s.resource_id = $2
      ORDER BY s.created_at DESC`,
-    [resourceType, req.params.resourceId]
+    [req.params.resourceType, req.params.resourceId]
   );
 
   return res.json({ shares: rows });
 });
 
-// ── DELETE /api/shares/:id ────────────────────────────────────────────────────
 sharesRouter.delete('/:id', async (req: Request, res: Response) => {
   const { rows } = await query(
     'SELECT * FROM shares WHERE id = $1',
@@ -90,18 +95,17 @@ sharesRouter.delete('/:id', async (req: Request, res: Response) => {
 
   if (!rows[0]) {
     return res.status(404).json({
-      error: { code: 'NOT_FOUND', message: 'Share not found' }
+      error: { code: 'NOT_FOUND', message: 'Share not found' },
     });
   }
 
   await requireRole(
     req.user!.id,
-    rows[0].resource_type,
-    rows[0].resource_id,
+    String(rows[0].resource_type),
+    String(rows[0].resource_id),
     'owner'
   );
 
   await query('DELETE FROM shares WHERE id = $1', [req.params.id]);
-
   return res.json({ message: 'Share revoked' });
 });
