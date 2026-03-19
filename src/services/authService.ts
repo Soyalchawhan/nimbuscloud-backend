@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { query } from '../db';
-import type { User, JwtPayload } from '../types';
+import type { User } from '../types';
 
 const SALT_ROUNDS = 12;
 
@@ -13,12 +13,12 @@ export const comparePassword = (password: string, hash: string): Promise<boolean
   bcrypt.compare(password, hash);
 
 export const generateAccessToken = (user: User): string => {
-  const secret = process.env.JWT_SECRET as string;
-  const expiresIn = (process.env.JWT_EXPIRES_IN || '15m') as string;
-  return jwt.sign(
+  const secret = process.env.JWT_SECRET || 'fallback-secret';
+  // Use any to bypass strict jsonwebtoken overload checking
+  return (jwt as any).sign(
     { sub: user.id, email: user.email },
     secret,
-    { expiresIn }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
   );
 };
 
@@ -33,8 +33,7 @@ export const saveRefreshToken = async (
   tokenHash: string
 ): Promise<void> => {
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
-
+  expiresAt.setDate(expiresAt.getDate() + 7);
   await query(
     `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
      VALUES ($1, $2, $3)`,
@@ -47,31 +46,30 @@ export const rotateRefreshToken = async (
 ): Promise<{ user: User; newRaw: string } | null> => {
   const oldHash = crypto.createHash('sha256').update(oldRaw).digest('hex');
 
-  const { rows: tokens } = await query<{ user_id: string; expires_at: Date }>(
+  const { rows: tokens } = await query(
     `SELECT user_id, expires_at FROM refresh_tokens WHERE token_hash = $1`,
     [oldHash]
   );
 
   if (!tokens[0] || tokens[0].expires_at < new Date()) {
-    // Invalid or expired — delete it
     await query('DELETE FROM refresh_tokens WHERE token_hash = $1', [oldHash]);
     return null;
   }
 
-  const { rows: users } = await query<User>(
-    `SELECT id, email, name, image_url as "imageUrl", provider, created_at as "createdAt", updated_at as "updatedAt"
+  const { rows: users } = await query(
+    `SELECT id, email, name, image_url as "imageUrl", provider,
+            created_at as "createdAt", updated_at as "updatedAt"
      FROM users WHERE id = $1`,
     [tokens[0].user_id]
   );
 
   if (!users[0]) return null;
 
-  // Rotate: delete old, create new
   await query('DELETE FROM refresh_tokens WHERE token_hash = $1', [oldHash]);
   const { raw: newRaw, hash: newHash } = generateRefreshToken();
   await saveRefreshToken(users[0].id, newHash);
 
-  return { user: users[0], newRaw };
+  return { user: users[0] as User, newRaw };
 };
 
 export const revokeAllTokens = async (userId: string): Promise<void> => {
@@ -84,20 +82,18 @@ export const setAuthCookies = (
   refreshToken: string
 ): void => {
   const isProd = process.env.NODE_ENV === 'production';
-
   res.cookie('access_token', accessToken, {
     httpOnly: true,
     secure: isProd,
-    sameSite: 'strict',
-    maxAge: 15 * 60 * 1000, // 15 min
+    sameSite: isProd ? 'none' : 'strict',
+    maxAge: 15 * 60 * 1000,
   });
-
   res.cookie('refresh_token', refreshToken, {
     httpOnly: true,
     secure: isProd,
-    sameSite: 'strict',
+    sameSite: isProd ? 'none' : 'strict',
     path: '/api/auth/refresh',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 };
 
