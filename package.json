@@ -39,16 +39,3 @@
   },
   "devDependencies": {}
 }
-```
-
-Press **Ctrl + S**.
-
----
-
-## Push to GitHub
-
-In VS Code backend terminal run:
-```
-git add .
-git commit -m "Fix types in dependencies for production build"
-git push
