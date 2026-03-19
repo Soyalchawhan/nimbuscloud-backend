@@ -15,7 +15,7 @@ export const authenticate = async (
 
     if (!token) {
       res.status(401).json({
-        error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
       });
       return;
     }
@@ -27,27 +27,27 @@ export const authenticate = async (
       `SELECT id, email, name, image_url as "imageUrl", provider,
               created_at as "createdAt", updated_at as "updatedAt"
        FROM users WHERE id = $1`,
-      [payload.sub]
+      [String(payload.sub)]
     );
 
     if (!rows[0]) {
       res.status(401).json({
-        error: { code: 'UNAUTHORIZED', message: 'User not found' }
+        error: { code: 'UNAUTHORIZED', message: 'User not found' },
       });
       return;
     }
 
-    req.user = rows[0] as User;
+    req.user = rows[0] as unknown as User;
     next();
   } catch (err: any) {
     if (err.name === 'TokenExpiredError') {
       res.status(401).json({
-        error: { code: 'TOKEN_EXPIRED', message: 'Access token expired' }
+        error: { code: 'TOKEN_EXPIRED', message: 'Access token expired' },
       });
       return;
     }
     res.status(401).json({
-      error: { code: 'INVALID_TOKEN', message: 'Invalid token' }
+      error: { code: 'INVALID_TOKEN', message: 'Invalid token' },
     });
   }
 };
@@ -70,9 +70,9 @@ export const optionalAuth = async (
         `SELECT id, email, name, image_url as "imageUrl", provider,
                 created_at as "createdAt", updated_at as "updatedAt"
          FROM users WHERE id = $1`,
-        [payload.sub]
+        [String(payload.sub)]
       );
-      if (rows[0]) req.user = rows[0] as User;
+      if (rows[0]) req.user = rows[0] as unknown as User;
     }
   } catch {
     // Continue without user
