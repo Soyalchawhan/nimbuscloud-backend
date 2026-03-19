@@ -12,12 +12,15 @@ export const hashPassword = (password: string): Promise<string> =>
 export const comparePassword = (password: string, hash: string): Promise<boolean> =>
   bcrypt.compare(password, hash);
 
-export const generateAccessToken = (user: User): string =>
-  jwt.sign(
-    { sub: user.id, email: user.email } as JwtPayload,
-    process.env.JWT_SECRET as string,
-    { expiresIn: (process.env.JWT_EXPIRES_IN || '15m') as string }
+export const generateAccessToken = (user: User): string => {
+  const secret = process.env.JWT_SECRET as string;
+  const expiresIn = (process.env.JWT_EXPIRES_IN || '15m') as string;
+  return jwt.sign(
+    { sub: user.id, email: user.email },
+    secret,
+    { expiresIn }
   );
+};
 
 export const generateRefreshToken = (): { raw: string; hash: string } => {
   const raw = crypto.randomBytes(64).toString('hex');
