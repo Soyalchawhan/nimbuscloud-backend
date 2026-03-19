@@ -18,7 +18,7 @@ sharesRouter.post('/', async (req: Request, res: Response) => {
   }).parse(req.body);
 
   // Only owner can grant access
-  await requireRole(req.user!.id, body.resourceType, body.resourceId, 'owner');
+  await requireRole(req.user!.id, body.resourceType as 'file' | 'folder', body.resourceId, 'owner');
 
   if (body.granteeUserId === req.user!.id) {
     return res.status(400).json({ error: { code: 'SELF_SHARE', message: 'Cannot share with yourself' } });
