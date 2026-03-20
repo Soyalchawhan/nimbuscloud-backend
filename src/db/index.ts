@@ -14,11 +14,12 @@ pool.on('error', (err: any) => {
   console.error('Unexpected error on idle client', err);
 });
 
-export const query = async (
+// Supports both query<Type>(sql, params) and query(sql, params)
+export const query = async <T = any>(
   text: string,
   params?: any[]
-): Promise<{ rows: any[]; rowCount: number | null }> => {
-  return pool.query(text, params);
+): Promise<{ rows: T[]; rowCount: number | null }> => {
+  return pool.query(text, params) as any;
 };
 
 export const withTransaction = async <T>(
