@@ -311,3 +311,4 @@ filesRouter.get('/:id/versions', async (req: Request, res: Response) => {
 
   return res.json({ versions: rows });
 });
+}
