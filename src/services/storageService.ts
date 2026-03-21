@@ -1,12 +1,12 @@
-import path from 'path';
-import fs from 'fs';
 import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
-
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+const getSupabase = () => {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key);
+};
 
 export interface PresignedUploadPart {
   partNumber: number;
@@ -35,19 +35,6 @@ export const generateStorageKey = (
   return `${ownerId}/${fileId}-${slug}.${ext}`;
 };
 
-export const generateVersionKey = (
-  baseKey: string,
-  versionNumber: number
-): string => {
-  const ext = baseKey.split('.').pop();
-  const base = baseKey.replace(/\.[^/.]+$/, '');
-  return `${base}.v${versionNumber}.${ext}`;
-};
-
-export const generateThumbnailKey = (storageKey: string): string => {
-  return `previews/${storageKey}`;
-};
-
 export const initMultipartUpload = async (
   storageKey: string,
   _fileName: string,
@@ -55,10 +42,26 @@ export const initMultipartUpload = async (
   _sizeBytes: number
 ): Promise<PresignedUploadResult> => {
   const uploadId = crypto.randomUUID();
-  const baseUrl = process.env.NODE_ENV === 'production'
-    ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME || 'nimbuscloud-api.onrender.com'}`
-    : `http://localhost:${process.env.PORT || 8080}`;
+  const supabase = getSupabase();
 
+  if (supabase && process.env.NODE_ENV === 'production') {
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'nimbuscloud-files';
+    const { data, error } = await (supabase.storage as any)
+      .from(bucket)
+      .createSignedUploadUrl(storageKey);
+
+    if (error) {
+      console.error('Supabase signed URL error:', error);
+    } else if (data?.signedUrl) {
+      return {
+        storageKey,
+        uploadId,
+        parts: [{ partNumber: 1, url: data.signedUrl, uploadId }],
+      };
+    }
+  }
+
+  const baseUrl = `http://localhost:${process.env.PORT || 8080}`;
   return {
     storageKey,
     uploadId,
@@ -72,33 +75,34 @@ export const initMultipartUpload = async (
 
 export const generateSignedDownloadUrl = async (
   storageKey: string,
-  _ttlSeconds = 3600
+  ttlSeconds = 3600
 ): Promise<string> => {
-  const baseUrl = process.env.NODE_ENV === 'production'
-    ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME || 'nimbuscloud-api.onrender.com'}`
-    : `http://localhost:${process.env.PORT || 8080}`;
+  const supabase = getSupabase();
 
+  if (supabase && process.env.NODE_ENV === 'production') {
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'nimbuscloud-files';
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(storageKey, ttlSeconds);
+
+    if (error) {
+      console.error('Supabase download URL error:', error);
+    } else if (data?.signedUrl) {
+      return data.signedUrl;
+    }
+  }
+
+  const baseUrl = `http://localhost:${process.env.PORT || 8080}`;
   return `${baseUrl}/api/files/download/${encodeURIComponent(storageKey)}`;
 };
 
 export const deleteStorageObject = async (storageKey: string): Promise<void> => {
-  const filePath = path.join(UPLOAD_DIR, storageKey.replace(/\//g, path.sep));
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
+  const supabase = getSupabase();
+  if (supabase && process.env.NODE_ENV === 'production') {
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'nimbuscloud-files';
+    await supabase.storage.from(bucket).remove([storageKey]);
   }
-};
-
-export const saveLocalFile = (storageKey: string, buffer: Buffer): void => {
-  const filePath = path.join(UPLOAD_DIR, storageKey.replace(/\//g, path.sep));
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  fs.writeFileSync(filePath, buffer);
-};
-
-export const getLocalFilePath = (storageKey: string): string => {
-  return path.join(UPLOAD_DIR, storageKey.replace(/\//g, path.sep));
 };
 
 export const ALLOWED_MIME_TYPES = new Set([
