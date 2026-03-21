@@ -82,6 +82,27 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 
 // ── POST /api/auth/refresh ────────────────────────────────────────────────────
 authRouter.post('/refresh', async (req: Request, res: Response) => {
+  const rawToken =
+    req.cookies?.refresh_token ||
+    req.headers.authorization?.replace('Bearer ', '');
+
+  if (!rawToken) {
+    return res.status(401).json({
+      error: { code: 'NO_REFRESH_TOKEN', message: 'Refresh token missing' }
+    });
+  }
+
+  const result = await rotateRefreshToken(rawToken);
+  if (!result) {
+    return res.status(401).json({
+      error: { code: 'INVALID_REFRESH_TOKEN', message: 'Refresh token invalid or expired' }
+    });
+  }
+
+  const accessToken = generateAccessToken(result.user);
+  setAuthCookies(res, accessToken, result.newRaw);
+  return res.json({ accessToken, refreshToken: result.newRaw });
+});
   const rawToken = req.cookies?.refresh_token;
   if (!rawToken) {
     return res.status(401).json({ error: { code: 'NO_REFRESH_TOKEN', message: 'Refresh token missing' } });
