@@ -3,12 +3,14 @@ import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
-import { query, withTransaction } from '../db';
+import { query } from '../db';
 import { authenticate } from '../middleware/auth';
 import { requireRole } from '../services/aclService';
 import { logActivity } from '../services/activityService';
 import {
   generateStorageKey,
+  initMultipartUpload,
+  generateSignedDownloadUrl,
   MAX_FILE_SIZE_BYTES,
 } from '../services/storageService';
 
@@ -75,15 +77,12 @@ filesRouter.put('/upload-part/:storageKey', (req: Request, res: Response) => {
 filesRouter.get('/download/:storageKey', (req: Request, res: Response) => {
   const storageKey = decodeURIComponent(req.params.storageKey);
   const filePath = getLocalFilePath(storageKey);
-
   console.log(`📥 Download: ${filePath}`);
-
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({
       error: { code: 'NOT_FOUND', message: 'File not found on disk' }
     });
   }
-
   return res.download(filePath);
 });
 
@@ -120,14 +119,11 @@ filesRouter.post('/init', async (req: Request, res: Response) => {
      req.user!.id, body.folderId ?? null]
   );
 
- const { initMultipartUpload } = require('../services/storageService');
-const upload = await initMultipartUpload(
-  storageKey, body.name, body.mimeType, body.sizeBytes
-);
+  const upload = await initMultipartUpload(
+    storageKey, body.name, body.mimeType, body.sizeBytes
+  );
 
-return res.status(201).json({
-  file: rows[0],
-  upload,
+  return res.status(201).json({ file: rows[0], upload });
 });
 
 // ── POST /api/files/complete ──────────────────────────────────────────────────
@@ -232,7 +228,9 @@ filesRouter.get('/:id', async (req: Request, res: Response) => {
     });
   }
 
-  const signedUrl = `${getBaseUrl()}/api/files/download/${encodeURIComponent(String(rows[0].storageKey))}`;
+  const signedUrl = await generateSignedDownloadUrl(
+    String(rows[0].storageKey)
+  );
 
   await logActivity(req.user!.id, 'download', 'file', req.params.id);
 
@@ -271,10 +269,7 @@ filesRouter.patch('/:id', async (req: Request, res: Response) => {
   }
 
   if (body.name) {
-    await logActivity(
-      req.user!.id, 'rename', 'file',
-      req.params.id, { name: body.name }
-    );
+    await logActivity(req.user!.id, 'rename', 'file', req.params.id, { name: body.name });
   }
   if ('folderId' in body) {
     await logActivity(req.user!.id, 'move', 'file', req.params.id);
@@ -311,4 +306,3 @@ filesRouter.get('/:id/versions', async (req: Request, res: Response) => {
 
   return res.json({ versions: rows });
 });
-}
