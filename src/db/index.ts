@@ -2,19 +2,16 @@ import { Pool, PoolClient } from 'pg';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 20,
+  max: 5,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-  ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: false }
-    : false,
+  connectionTimeoutMillis: 10000,
+  ssl: { rejectUnauthorized: false },
 });
 
 pool.on('error', (err: any) => {
   console.error('Unexpected error on idle client', err);
 });
 
-// Supports both query<Type>(sql, params) and query(sql, params)
 export const query = async <T = any>(
   text: string,
   params?: any[]
