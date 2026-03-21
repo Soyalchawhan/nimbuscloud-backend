@@ -120,16 +120,14 @@ filesRouter.post('/init', async (req: Request, res: Response) => {
      req.user!.id, body.folderId ?? null]
   );
 
-  const uploadUrl = `${getBaseUrl()}/api/files/upload-part/${encodeURIComponent(storageKey)}`;
+ const { initMultipartUpload } = require('../services/storageService');
+const upload = await initMultipartUpload(
+  storageKey, body.name, body.mimeType, body.sizeBytes
+);
 
-  return res.status(201).json({
-    file: rows[0],
-    upload: {
-      storageKey,
-      uploadId: uuidv4(),
-      parts: [{ partNumber: 1, url: uploadUrl }],
-    },
-  });
+return res.status(201).json({
+  file: rows[0],
+  upload,
 });
 
 // ── POST /api/files/complete ──────────────────────────────────────────────────
