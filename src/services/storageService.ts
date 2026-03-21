@@ -2,10 +2,8 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 
-// Local storage directory
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 
-// Make sure uploads folder exists
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
@@ -37,7 +35,10 @@ export const generateStorageKey = (
   return `${ownerId}/${fileId}-${slug}.${ext}`;
 };
 
-export const generateVersionKey = (baseKey: string, versionNumber: number): string => {
+export const generateVersionKey = (
+  baseKey: string,
+  versionNumber: number
+): string => {
   const ext = baseKey.split('.').pop();
   const base = baseKey.replace(/\.[^/.]+$/, '');
   return `${base}.v${versionNumber}.${ext}`;
@@ -49,30 +50,35 @@ export const generateThumbnailKey = (storageKey: string): string => {
 
 export const initMultipartUpload = async (
   storageKey: string,
-  fileName: string,
-  mimeType: string,
-  sizeBytes: number
+  _fileName: string,
+  _mimeType: string,
+  _sizeBytes: number
 ): Promise<PresignedUploadResult> => {
   const uploadId = crypto.randomUUID();
-  const uploadUrl = `http://localhost:${process.env.PORT || 8080}/api/files/upload-part/${encodeURIComponent(storageKey)}`;
+  const baseUrl = process.env.NODE_ENV === 'production'
+    ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME || 'nimbuscloud-api.onrender.com'}`
+    : `http://localhost:${process.env.PORT || 8080}`;
 
   return {
     storageKey,
     uploadId,
-    parts: [{ partNumber: 1, url: uploadUrl, uploadId }],
+    parts: [{
+      partNumber: 1,
+      url: `${baseUrl}/api/files/upload-part/${encodeURIComponent(storageKey)}`,
+      uploadId,
+    }],
   };
 };
 
 export const generateSignedDownloadUrl = async (
   storageKey: string,
-  ttlSeconds = 3600
+  _ttlSeconds = 3600
 ): Promise<string> => {
-  const token = crypto
-    .createHmac('sha256', process.env.JWT_SECRET || 'dev')
-    .update(`${storageKey}:${Date.now() + ttlSeconds * 1000}`)
-    .digest('hex');
+  const baseUrl = process.env.NODE_ENV === 'production'
+    ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME || 'nimbuscloud-api.onrender.com'}`
+    : `http://localhost:${process.env.PORT || 8080}`;
 
-  return `http://localhost:${process.env.PORT || 8080}/api/files/download/${encodeURIComponent(storageKey)}?token=${token}`;
+  return `${baseUrl}/api/files/download/${encodeURIComponent(storageKey)}`;
 };
 
 export const deleteStorageObject = async (storageKey: string): Promise<void> => {
