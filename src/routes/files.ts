@@ -103,7 +103,11 @@ filesRouter.post('/init', async (req: Request, res: Response) => {
     [fileId, body.name, body.mimeType, body.sizeBytes, storageKey, req.user!.id, body.folderId ?? null]
   );
 
-  const uploadUrl = `http://localhost:${process.env.PORT || 8080}/api/files/upload-part/${encodeURIComponent(storageKey)}`;
+  const baseUrl = process.env.NODE_ENV === 'production'
+  ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME}`
+  : `http://localhost:${process.env.PORT || 8080}`;
+
+const uploadUrl = `${baseUrl}/api/files/upload-part/${encodeURIComponent(storageKey)}`;
 
   return res.status(201).json({
     file: rows[0],
